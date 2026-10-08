@@ -1,0 +1,42 @@
+{
+  "name": "opencode-ghost",
+  "version": "0.1.0",
+  "description": "Local inline prompt completion for OpenCode",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.tsx",
+    "./tui": "./src/index.tsx"
+  },
+  "scripts": {
+    "test": "bun test --timeout 30000",
+    "typecheck": "tsgo --noEmit",
+    "check": "bun run typecheck && bun test --timeout 30000",
+    "demo-server": "bun script/demo-server.ts",
+    "benchmark": "bun script/benchmark.ts"
+  },
+  "peerDependencies": {
+    "@opentui/core": "0.4.5",
+    "@opentui/keymap": "0.4.5",
+    "@opentui/solid": "0.4.5",
+    "solid-js": "1.9.10"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "1.18.35",
+    "@opentui/core": "0.4.5",
+    "@opentui/keymap": "0.4.5",
+    "@opentui/solid": "0.4.5",
+    "solid-js": "1.9.10",
+    "@types/bun": "1.3.13",
+    "@typescript/native-preview": "7.0.0-dev.20251207.1",
+    "prettier": "3.6.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/racinette/opencode-ghost.git"
+  },
+  "prettier": {
+    "semi": false,
+    "printWidth": 120
+  }
+}
