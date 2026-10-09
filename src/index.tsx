@@ -8,7 +8,12 @@ import { parseOptions, type Options } from "./options"
 function GhostPrompt(props: TuiPromptProps & { api: TuiPluginApi; options: Options; unsupported(): void }) {
   const [ref, setRef] = createSignal<TuiPromptRef>()
   const context = createMemo(() =>
-    conversationTail(props.api.state, props.sessionID, props.options.conversation_chars, props.options.prompt_format),
+    conversationTail(
+      props.api.state,
+      props.sessionID,
+      props.options.conversation_chars,
+      props.options.backend === "openai-chat" ? "messages" : props.options.prompt_format,
+    ),
   )
   let controller: PromptController | undefined
   const dispose = () => controller?.dispose()

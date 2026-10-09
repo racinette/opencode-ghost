@@ -139,3 +139,17 @@ test("all native cutoff positions keep role-token boundaries intact and stay wit
     expect(tail === "" || /^(?:<\|im_start\|>(?:user|assistant)\n[^<]*<\|im_end\|>\n?)+$/.test(tail)).toBe(true)
   }
 })
+
+test("chat context preserves structured roles and safely trims Unicode message bodies", () => {
+  const f = fixture()
+  expect(JSON.parse(conversationTail(f.state, "active", 10000, "messages"))).toEqual([
+    { role: "user", content: "Add validation." },
+    { role: "assistant", content: "Validation is implemented." },
+  ])
+  f.parts.two = [text("two", "Prefix 🙂中é")]
+  expect(JSON.parse(conversationTail(f.state, "active", 12, "messages"))).toEqual([
+    { role: "assistant", content: "🙂中é" },
+  ])
+  expect(conversationTail(f.state, "active", 9, "messages")).toBe("")
+  expect(conversationTail(f.state, "active", 0, "messages")).toBe("")
+})

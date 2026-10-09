@@ -180,3 +180,116 @@ test("native role tokens are the default and prompt_format is validated", () => 
   expect(parseOptions({ prompt_format: "plain" }).prompt_format).toBe("plain")
   expect(() => parseOptions({ prompt_format: "invalid" })).toThrow("Invalid prompt_format")
 })
+
+test.each([
+  { draft: "Hello", content: " world", expected: " world" },
+  { draft: "Hello ", content: " world", expected: "world" },
+  { draft: "Hello  ", content: "  world", expected: "world" },
+  { draft: "Hello ", content: "world", expected: "world" },
+  { draft: "Hello ", content: " world ", expected: "world " },
+  { draft: "walk", content: "ing", expected: "ing" },
+  { draft: "Code:\n  ", content: "  return value", expected: "  return value" },
+  { draft: "Code:\n", content: "  return value", expected: "  return value" },
+  { draft: "Hello ", content: "\n  next line", expected: "\n  next line" },
+])("normalizes word separators without changing the draft or indentation: %j", async ({ draft, content, expected }) => {
+  let sentPrompt: unknown
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(request) {
+      sentPrompt = (await request.json()).prompt
+      return Response.json({ content })
+    },
+  })
+  try {
+    const predict = createModelClient(parseOptions({ endpoint: server.url.origin, stop_on_newline: false }))
+    expect(await predict(draft, new AbortController().signal)).toBe(expected)
+    expect(sentPrompt).toBe("<|im_start|>user\n" + draft)
+  } finally {
+    server.stop(true)
+  }
+})
+
+test.each(["openai-completion", "openai-chat"])("%s sends model, auth, context and decodes suffix", async (backend) => {
+  const variable = "GHOST_TEST_PROVIDER_KEY"
+  process.env[variable] = "test-token"
+  let received: any
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(request) {
+      expect(new URL(request.url).pathname).toBe(backend === "openai-chat" ? "/v1/chat/completions" : "/v1/completions")
+      expect(request.headers.get("authorization")).toBe("Bearer test-token")
+      expect(request.headers.get("x-api-key")).toBe("test-token")
+      expect(request.headers.get("x-project")).toBe("example")
+      received = await request.json()
+      return Response.json({
+        choices: [backend === "openai-chat" ? { message: { content: " suffix" } } : { text: " suffix" }],
+      })
+    },
+  })
+  try {
+    const predict = createModelClient(
+      parseOptions({
+        backend,
+        endpoint: server.url.origin + "/v1/",
+        model: "example",
+        api_key_env: variable,
+        headers: { "x-project": "example" },
+        headers_env: { "x-api-key": variable },
+      }),
+    )
+    const context =
+      backend === "openai-chat"
+        ? JSON.stringify([{ role: "assistant", content: "Earlier response" }])
+        : "Earlier response"
+    expect(await predict("draft", new AbortController().signal, context)).toBe(" suffix")
+    expect(received.model).toBe("example")
+    expect(received.max_tokens).toBe(8)
+    expect(received.n_predict).toBeUndefined()
+    if (backend === "openai-chat") {
+      expect(received.messages.slice(1)).toEqual([
+        { role: "assistant", content: "Earlier response" },
+        { role: "user", content: "draft" },
+      ])
+      expect(received.messages[0].content).toContain("Return only the text to append")
+      expect(received.prompt).toBeUndefined()
+    } else expect(received.prompt).toContain("draft")
+  } finally {
+    server.stop(true)
+    delete process.env[variable]
+  }
+})
+
+test("provider configuration rejects unsupported backends, missing models and invalid headers", () => {
+  for (const options of [
+    { backend: "unknown" },
+    { backend: "openai-chat" },
+    { backend: "openai-completion", model: "" },
+    { headers: { authorization: 12 } },
+    { headers_env: { "bad header": "KEY" } },
+  ])
+    expect(() => parseOptions(options)).toThrow()
+})
+
+test("missing authentication fails before sending a request", async () => {
+  const predict = createModelClient(parseOptions({ api_key_env: "GHOST_TEST_MISSING_KEY" }))
+  await expect(predict("draft", new AbortController().signal)).rejects.toThrow("Missing API key")
+})
+
+test.each([{ choices: [] }, { choices: [{ message: { content: null } }] }, { choices: [{ text: 3 }] }])(
+  "malformed compatible responses fail safely: %j",
+  async (response) => {
+    const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => Response.json(response) })
+    try {
+      await expect(
+        createModelClient(parseOptions({ backend: "openai-chat", model: "example", endpoint: server.url.origin }))(
+          "draft",
+          new AbortController().signal,
+        ),
+      ).rejects.toThrow("Invalid completion response")
+    } finally {
+      server.stop(true)
+    }
+  },
+)

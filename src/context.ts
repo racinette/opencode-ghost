@@ -27,7 +27,7 @@ export function conversationTail(
   state: ConversationState,
   sessionID: string | undefined,
   characters: number,
-  format: PromptFormat = "chatml",
+  format: PromptFormat | "messages" = "chatml",
 ) {
   if (!sessionID || characters === 0) return ""
   const messages = state.session.messages(sessionID)
@@ -43,6 +43,20 @@ export function conversationTail(
         .join("\n")
       return text.trim() ? [{ role: message.role, text }] : []
     })
+  if (format === "messages") {
+    const retained: { role: "user" | "assistant"; content: string }[] = []
+    let remaining = characters
+    for (const item of turns.toReversed()) {
+      const framing = item.role.length
+      if (remaining <= framing) break
+      const text = Array.from(item.text)
+      const tail = text.slice(-Math.min(text.length, remaining - framing))
+      retained.unshift({ role: item.role, content: tail.join("") })
+      remaining -= framing + tail.length
+      if (tail.length < text.length) break
+    }
+    return retained.length ? JSON.stringify(retained) : ""
+  }
   if (format === "plain") {
     return Array.from(turns.map((item) => turn(item.role, item.text, format)).join("\n\n"))
       .slice(-characters)

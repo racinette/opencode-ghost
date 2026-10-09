@@ -1,6 +1,11 @@
 export type PromptFormat = "chatml" | "plain"
 
 export type Options = {
+  backend: "llamacpp" | "openai-completion" | "openai-chat"
+  model?: string
+  api_key_env?: string
+  headers: Record<string, string>
+  headers_env: Record<string, string>
   enabled: boolean
   endpoint: string
   prompt_format: PromptFormat
@@ -49,12 +54,40 @@ export function parseOptions(value: unknown): Options {
   if (accept !== false && (typeof accept !== "string" || !accept.trim())) throw new Error("Invalid accept_key")
   const format = input.prompt_format ?? "chatml"
   if (format !== "chatml" && format !== "plain") throw new Error("Invalid prompt_format; use chatml or plain")
+  const backend = input.backend ?? "llamacpp"
+  if (!["llamacpp", "openai-completion", "openai-chat"].includes(backend as string)) throw new Error("Invalid backend")
+  function optionalString(name: string) {
+    const item = input[name]
+    if (item === undefined) return undefined
+    if (typeof item !== "string" || !item.trim()) throw new Error(`Invalid ${name}`)
+    return item
+  }
+  const model = optionalString("model")
+  if (backend !== "llamacpp" && !model) throw new Error("model is required for OpenAI-compatible backends")
+  function headers(name: string) {
+    const item = input[name] ?? {}
+    if (!record(item) || Object.values(item).some((value) => typeof value !== "string" || !value))
+      throw new Error(`Invalid ${name}`)
+    for (const [key, value] of Object.entries(item)) {
+      try {
+        new Headers({ [key]: value as string })
+      } catch {
+        throw new Error(`Invalid ${name}`)
+      }
+    }
+    return item as Record<string, string>
+  }
   return {
+    backend: backend as Options["backend"],
+    model,
+    api_key_env: optionalString("api_key_env"),
+    headers: headers("headers"),
+    headers_env: headers("headers_env"),
     prompt_format: format,
     enabled: boolean("enabled", true),
     endpoint: url.href.replace(/\/$/, ""),
     conversation_chars: number("conversation_chars", 10_000, 0, Number.MAX_SAFE_INTEGER, true),
-    debounce_ms: number("debounce_ms", 250, 0, 5000, true),
+    debounce_ms: number("debounce_ms", 100, 0, 5000, true),
     max_tokens: number("max_tokens", 8, 1, 64, true),
     temperature: number("temperature", 0.2, 0, 2),
     top_p: number("top_p", 0.95, 0, 1),
