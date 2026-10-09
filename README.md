@@ -10,9 +10,9 @@ Suggestions stay inactive during command and file autocomplete, shell mode, and 
 
 ## Setup
 
-Requires Bun, OpenCode with prompt ghost API support, and a supported completion endpoint. The setup below uses llama.cpp.
+Requires Bun, OpenCode with prompt ghost API support (`ghost` and `setGhost` on the prompt reference), and a supported completion endpoint. The plugin works with OpenCode's normal backend or an alternative backend such as the Codex bridge; neither requires the other. The setup below uses llama.cpp.
 
-Clone the plugin and install its dependencies:
+Clone the plugin anywhere and install its dependencies:
 
 ```sh
 git clone https://github.com/racinette/opencode-ghost.git
@@ -74,7 +74,7 @@ Remote endpoints receive your draft and retained conversation. Hosted services m
 
 ## Configuration
 
-All options are optional.
+Options have defaults except `model`, which is required for OpenAI-compatible backends.
 
 | Option               | Default                   | Meaning                                               |
 | -------------------- | ------------------------- | ----------------------------------------------------- |
